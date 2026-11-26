@@ -1,0 +1,17 @@
+# Archivo de configuracion real (NUNCA subir ni entregar)
+.env
+Restaurante/.env
+
+# Entornos virtuales y cache de Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Archivos de IDE / sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

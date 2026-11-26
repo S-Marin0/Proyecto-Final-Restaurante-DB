@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Reservas de Mesas{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Reservas de Mesas</h2>
+  <p>Agende reservas verificando automaticamente el aforo de cada mesa y evitando cruces de horario segun la duracion del evento.</p>
+</div>
+
+{% if error_permiso %}
+  <div class="alert alert-permiso">
+    <strong>Acceso restringido por la base de datos:</strong><br>
+    {{ error_permiso }}<br>
+    <span style="font-size:0.86rem;">Cambie al perfil <strong>Operacion</strong> en la barra superior para gestionar las reservas del restaurante.</span>
+  </div>
+{% elif error_bd %}
+  <div class="alert alert-error">{{ error_bd }}</div>
+{% else %}
+  {% if resultado_tx %}
+    <div class="card">
+      <h2 style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <span>Resumen de la operacion</span>
+        {% if resultado_tx.resultado == 'COMMIT' %}
+          <span class="badge badge-green">Confirmada (COMMIT)</span>
+        {% else %}
+          <span class="badge badge-red">Revertida (ROLLBACK)</span>
+        {% endif %}
+      </h2>
+      <div class="alert {% if resultado_tx.resultado == 'COMMIT' %}alert-success{% else %}alert-warning{% endif %}">
+        {{ resultado_tx.mensaje }}
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Control</th>
+            <th>Antes</th>
+            <th>Despues</th>
+            <th>Verificacion</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Reservas registradas</strong></td>
+            <td>{{ resultado_tx.antes.total_reservas }}</td>
+            <td><strong>{{ resultado_tx.despues.total_reservas }}</strong></td>
+            <td>
+              {% if resultado_tx.resultado == 'COMMIT' %}
+                Nueva reserva guardada (+1)
+              {% else %}
+                Sin cambios (se deshizo la insercion)
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Estado de la Mesa {{ resultado_tx.antes.numero_mesa }}</strong></td>
+            <td>{{ resultado_tx.antes.estado_mesa }}</td>
+            <td><strong>{{ resultado_tx.despues.estado_mesa }}</strong></td>
+            <td>
+              {% if resultado_tx.resultado == 'COMMIT' %}
+                Mesa marcada como Reservada
+              {% else %}
+                Sin cambios (nada quedo a medias)
+              {% endif %}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+  <div class="card">
+    <h2>Agendar nueva reserva</h2>
+    <p class="muted">
+      Al confirmar la reserva, el sistema valida la capacidad maxima de la mesa y que no se cruce con otras reservas activas,
+      registrando la reserva y actualizando el estado de la mesa en una sola operacion atomica.
+    </p>
+
+    <form method="post" action="{{ url_for('reservas') }}">
+      <div class="form-row">
+        <div class="field">
+          <label for="cedula_cliente">Cliente</label>
+          <select id="cedula_cliente" name="cedula_cliente" required>
+            {% for c in catalogos.clientes %}
+              <option value="{{ c.cedula }}">{{ c.nombre }} ({{ c.cedula }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="id_mesa">Mesa</label>
+          <select id="id_mesa" name="id_mesa" required>
+            {% for m in catalogos.mesas %}
+              <option value="{{ m.id_mesa }}">
+                Mesa {{ m.numero_mesa }} · hasta {{ m.capacidad_mesa }} pers. ({{ m.nombre_estado_mesa }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="id_tipo_reserva">Tipo de evento</label>
+          <select id="id_tipo_reserva" name="id_tipo_reserva" required>
+            {% for t in catalogos.tipos %}
+              <option value="{{ t.id_tipo_reserva }}">
+                {{ t.nombre_tipo }} · {{ t.duracion_horas }} h (+{{ t.costo_adicional | moneda }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-top:12px;">
+        <div class="field" style="max-width:260px;">
+          <label for="fecha_hora_inicio">Fecha y hora de inicio</label>
+          <input type="datetime-local" id="fecha_hora_inicio" name="fecha_hora_inicio" value="2026-11-28T19:00" required>
+        </div>
+        <div class="field" style="max-width:190px;">
+          <label for="cantidad_personas">Numero de personas</label>
+          <input type="number" id="cantidad_personas" name="cantidad_personas" value="4" required>
+        </div>
+        <div style="margin-left:auto;">
+          <button type="submit" class="btn btn-success">Confirmar reserva</button>
+        </div>
+      </div>
+
+      <details style="margin-top:14px;">
+        <summary>Simulacion de contingencia (probar reversion atomica / ROLLBACK)</summary>
+        <div style="margin-top:10px;">
+          <label style="display:flex; align-items:center; gap:8px; color:var(--danger); cursor:pointer;">
+            <input type="checkbox" name="forzar_fallo">
+            <span><strong>Forzar fallo a la mitad de la transaccion:</strong> inserta la reserva y provoca un fallo real en el paso 2 al actualizar la mesa para demostrar que el <code>ROLLBACK</code> deja todo intacto.</span>
+          </label>
+        </div>
+      </details>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Agenda de reservas ({{ reservas | length }})</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Fecha y hora</th>
+          <th>Mesa (aforo)</th>
+          <th>Comensales</th>
+          <th>Tipo (duracion)</th>
+          <th>Cliente</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in reservas %}
+          <tr>
+            <td><strong>#{{ r.id_reserva }}</strong></td>
+            <td>{{ r.fecha_hora_inicio }}</td>
+            <td>Mesa {{ r.numero_mesa }} ({{ r.capacidad_mesa }} pers.)</td>
+            <td>{{ r.cantidad_personas }}</td>
+            <td>{{ r.nombre_tipo }} ({{ r.duracion_horas }} h)</td>
+            <td>{{ r.nombre_cliente }}</td>
+            <td>
+              <span class="badge {% if r.nombre_estado_reserva == 'Pendiente' %}badge-warn{% elif r.nombre_estado_reserva == 'Cancelada' %}badge-red{% elif r.nombre_estado_reserva == 'No asistió' %}badge-purple{% else %}badge-green{% endif %}">
+                {{ r.nombre_estado_reserva }}
+              </span>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+{% endblock %}

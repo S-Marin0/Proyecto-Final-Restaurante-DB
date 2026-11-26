@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Administrar Carta{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Administracion de la Carta</h2>
+  <p>Agregue nuevos platos, ajuste precios o disponibilidad y retire platos sin historial de ventas.</p>
+</div>
+
+{% if error_permiso %}
+  <div class="alert alert-permiso">
+    <strong>Acceso restringido por la base de datos:</strong><br>
+    {{ error_permiso }}<br>
+    <span style="font-size:0.86rem;">El perfil <strong>Consulta</strong> no tiene permisos para administrar platos. Cambie a <strong>Operacion</strong> en la barra superior.</span>
+  </div>
+  <div class="card">
+    <h3>Verificar rechazo de escritura</h3>
+    <p class="muted">Si intenta enviar un registro nuevo con el perfil de Consulta, la base de datos bloquea la escritura directamente:</p>
+    <form method="post" action="{{ url_for('platos_crear') }}">
+      <input type="hidden" name="nombre_plato" value="Plato Intento Consulta">
+      <input type="hidden" name="precio_base" value="10000">
+      <input type="hidden" name="tiempo_preparacion_min" value="10">
+      <input type="hidden" name="id_categoria_plato" value="1">
+      <input type="hidden" name="id_estado_plato" value="1">
+      <input type="hidden" name="id_menu" value="1">
+      <button type="submit" class="btn btn-warn">Probar intento de escritura</button>
+    </form>
+  </div>
+{% elif error_bd %}
+  <div class="alert alert-error">{{ error_bd }}</div>
+{% else %}
+  <div class="card">
+    <h2>Agregar nuevo plato a la carta</h2>
+
+    <form method="post" action="{{ url_for('platos_crear') }}">
+      <div class="form-row">
+        <div class="field">
+          <label for="nombre_plato">Nombre del plato *</label>
+          <input type="text" id="nombre_plato" name="nombre_plato" required placeholder="Ej. Ajiaco Santafereño">
+        </div>
+        <div class="field">
+          <label for="descripcion_plato">Descripcion</label>
+          <input type="text" id="descripcion_plato" name="descripcion_plato" placeholder="Ingredientes o acompanamientos">
+        </div>
+        <div class="field" style="max-width:155px;">
+          <label for="precio_base">Precio (COP) *</label>
+          <input type="number" step="any" id="precio_base" name="precio_base" value="18000" required>
+        </div>
+        <div class="field" style="max-width:140px;">
+          <label for="tiempo_preparacion_min">Tiempo (min) *</label>
+          <input type="number" id="tiempo_preparacion_min" name="tiempo_preparacion_min" value="15" required>
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-top:12px;">
+        <div class="field">
+          <label for="id_categoria_plato">Categoria</label>
+          <select id="id_categoria_plato" name="id_categoria_plato">
+            {% for c in catalogos.categorias %}
+              <option value="{{ c.id }}">{{ c.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="id_estado_plato">Disponibilidad</label>
+          <select id="id_estado_plato" name="id_estado_plato">
+            {% for e in catalogos.estados %}
+              <option value="{{ e.id }}">{{ e.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="id_menu">Menu</label>
+          <select id="id_menu" name="id_menu">
+            {% for m in catalogos.menus %}
+              <option value="{{ m.id }}">{{ m.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <details style="margin-top:12px;">
+        <summary>Opciones avanzadas (codigo manual de categoria)</summary>
+        <div class="form-row" style="margin-top:10px;">
+          <div class="field" style="max-width:280px;">
+            <label for="id_categoria_manual">ID de categoria manual (opcional)</label>
+            <input type="number" id="id_categoria_manual" name="id_categoria_manual" placeholder="Dejar vacio para usar el selector">
+          </div>
+          <p class="muted" style="flex:2; margin:0;">
+            Permite ingresar un codigo de categoria manual (por ejemplo <code>999</code>) para validar la integridad referencial.
+          </p>
+        </div>
+      </details>
+
+      <div class="form-row" style="margin-top:14px; justify-content:space-between;">
+        <label style="display:flex; align-items:center; gap:7px; font-weight:500;">
+          <input type="checkbox" name="es_personalizable" checked> Permite personalizacion de ingredientes
+        </label>
+        <button type="submit" class="btn btn-success">Agregar plato</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Platos en carta ({{ platos | length }})</h2>
+    <p class="muted">
+      Modifique el nombre, precio, tiempo de preparacion o estado de cualquier plato.
+      Los platos que ya tienen pedidos o recetas registradas no pueden eliminarse para preservar el historial.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Nombre, precio, tiempo y estado</th>
+          <th>Categoria / Menu</th>
+          <th>Retirar</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in platos %}
+          <tr>
+            <td><strong>#{{ p.id_plato }}</strong></td>
+            <td>
+              <form method="post" action="{{ url_for('platos_actualizar') }}" class="form-row" style="gap:6px;">
+                <input type="hidden" name="id_plato" value="{{ p.id_plato }}">
+                <input type="text" name="nombre_plato" value="{{ p.nombre_plato }}" style="flex:2; min-width:165px;">
+                <input type="number" step="any" name="precio_base" value="{{ p.precio_base }}" style="width:110px;">
+                <input type="number" name="tiempo_preparacion_min" value="{{ p.tiempo_preparacion_min }}" style="width:72px;">
+                <select name="id_estado_plato" style="width:135px;">
+                  {% for e in catalogos.estados %}
+                    <option value="{{ e.id }}" {% if e.id == p.id_estado_plato %}selected{% endif %}>{{ e.nombre }}</option>
+                  {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-sm">Guardar</button>
+              </form>
+            </td>
+            <td class="muted">{{ p.nombre_categoria_plato }}<br><small>{{ p.nombre_menu }}</small></td>
+            <td>
+              <form method="post" action="{{ url_for('platos_eliminar') }}" onsubmit="return confirm('¿Seguro que desea eliminar el plato {{ p.nombre_plato }}?');">
+                <input type="hidden" name="id_plato" value="{{ p.id_plato }}">
+                <button type="submit" class="btn btn-danger btn-sm">Eliminar</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+{% endblock %}

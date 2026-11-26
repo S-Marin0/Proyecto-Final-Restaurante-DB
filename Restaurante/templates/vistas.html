@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{% if rol_activo == 'consulta' %}Estado de Pedidos{% else %}Pedidos y Clientes{% endif %}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  {% if rol_activo == 'consulta' %}
+    <h2>Estado de Pedidos en Salon</h2>
+    <p>Consulte el estado actualizado de los pedidos y nuestra comunidad de clientes (datos personales protegidos).</p>
+  {% else %}
+    <h2>Pedidos y Directorio Publico de Clientes</h2>
+    <p>Seguimiento consolidado de pedidos y clientes registrados mediante las vistas publicas del esquema.</p>
+  {% endif %}
+</div>
+
+{% if error_bd %}
+  <div class="alert alert-error">{{ error_bd }}</div>
+{% else %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+      <h2 style="margin:0;">
+        {% if rol_activo == 'consulta' %}Tablero de pedidos{% else %}Historial consolidado de pedidos{% endif %}
+      </h2>
+      <span class="badge badge-warm">Vista: <code>v_pedido_publico</code></span>
+    </div>
+    <p class="muted" style="margin-top:6px;">
+      Estado de cada pedido con su mesa, mesero asignado y valor total calculado.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Pedido</th>
+          <th>Fecha y hora</th>
+          <th>Mesa</th>
+          <th>Estado</th>
+          <th>Atendido por</th>
+          <th>Cliente</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in pedidos_vista %}
+          <tr>
+            <td><strong>#{{ p.id_pedido }}</strong></td>
+            <td>{{ p.fecha_creacion }}</td>
+            <td>Mesa {{ p.numero_mesa }}</td>
+            <td>
+              <span class="badge {% if p.nombre_estado_pedido == 'Pagado' %}badge-green{% elif p.nombre_estado_pedido == 'Cancelado' %}badge-red{% else %}badge-warn{% endif %}">
+                {{ p.nombre_estado_pedido }}
+              </span>
+            </td>
+            <td>{{ p.mesero }}</td>
+            <td>{{ p.nombre_cliente }}</td>
+            <td><strong>{{ p.total_pedido | moneda }}</strong></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+      <h2 style="margin:0;">Clientes registrados (directorio publico)</h2>
+      <span class="badge badge-warm">Vista: <code>v_cliente_publico</code></span>
+    </div>
+    <p class="muted" style="margin-top:6px;">
+      Por privacidad, esta vista oculta cedula, telefono y correo electronico.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Cliente</th>
+          <th>Fecha de registro</th>
+          <th>Categoria</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in clientes_vista %}
+          <tr>
+            <td><strong>{{ c.nombre_cliente }}</strong></td>
+            <td>{{ c.fecha_registro }}</td>
+            <td><span class="badge badge-blue">{{ c.nombre_estado_cliente }}</span></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+{% endblock %}

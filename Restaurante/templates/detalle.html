@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Mesas y Consumo{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Mesas, Consumo de Insumos y Detalle de Comandas</h2>
+  <p>Control operativo de rotacion por mesa, consumo real de ingredientes en cocina y detalle de pedidos recientes.</p>
+</div>
+
+{% if error_permiso %}
+  <div class="alert alert-permiso">
+    <strong>Acceso restringido por la base de datos:</strong><br>
+    {{ error_permiso }}<br>
+    <span style="font-size:0.86rem;">Cambie al perfil <strong>Operacion</strong> en la barra superior para consultar el detalle operativo.</span>
+  </div>
+{% elif error_bd %}
+  <div class="alert alert-error">{{ error_bd }}</div>
+{% else %}
+  <div class="card">
+    <h2>Actividad por mesa (incluidas mesas sin movimiento)</h2>
+    <p class="muted">
+      Todas las mesas del plano del restaurante junto con la cantidad de pedidos atendidos. Las mesas sin movimiento se resaltan con <strong>0 pedidos</strong>.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Mesa</th>
+          <th>Capacidad</th>
+          <th>Estado actual</th>
+          <th>Pedidos atendidos</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in mesas %}
+          <tr class="{% if m.pedidos == 0 %}highlight-zero{% endif %}">
+            <td><strong>Mesa {{ m.numero_mesa }}</strong></td>
+            <td>{{ m.capacidad_mesa }} personas</td>
+            <td>{{ m.nombre_estado_mesa }}</td>
+            <td>
+              {% if m.pedidos == 0 %}
+                <span class="badge badge-warn">0 pedidos (sin movimiento)</span>
+              {% else %}
+                <strong>{{ m.pedidos }}</strong>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Consumo de ingredientes en ventas pagadas</h2>
+    <p class="muted">
+      Insumos descontados de inventario por pedidos ya facturados, agrupados segun su unidad de medida.
+    </p>
+
+    <form method="get" action="{{ url_for('detalle') }}" class="form-row" style="margin-bottom:12px;">
+      <div class="field" style="max-width:240px;">
+        <label for="unidad">Unidad de medida</label>
+        <select id="unidad" name="unidad">
+          <option value="g" {% if unidad == 'g' %}selected{% endif %}>Gramos (g)</option>
+          <option value="ml" {% if unidad == 'ml' %}selected{% endif %}>Mililitros (ml)</option>
+          <option value="unidad" {% if unidad == 'unidad' %}selected{% endif %}>Unidades (unidad)</option>
+        </select>
+      </div>
+      <div>
+        <button type="submit" class="btn">Consultar</button>
+      </div>
+    </form>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Ingrediente</th>
+          <th>Unidad</th>
+          <th>Total consumido</th>
+          <th>Stock actual</th>
+          <th>Stock minimo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in consumo %}
+          <tr>
+            <td><strong>{{ c.nombre_ingrediente }}</strong></td>
+            <td>{{ c.unidad_medida }}</td>
+            <td><strong>{{ c.cantidad_usada }}</strong></td>
+            <td>{{ c.stock_actual }}</td>
+            <td>{{ c.stock_minimo }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Ultimas 15 lineas de comanda</h2>
+    <p class="muted">Detalle por plato con cliente, mesa, estado del pedido y valor total de la linea incluyendo adicionales.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Pedido</th>
+          <th>Fecha</th>
+          <th>Mesa</th>
+          <th>Cliente</th>
+          <th>Estado</th>
+          <th>Plato</th>
+          <th>Cant.</th>
+          <th>Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in lineas_pedidos %}
+          <tr>
+            <td><strong>#{{ l.id_pedido }}</strong></td>
+            <td>{{ l.fecha_creacion }}</td>
+            <td>Mesa {{ l.numero_mesa }}</td>
+            <td>{{ l.nombre_cliente }}</td>
+            <td>{{ l.nombre_estado_pedido }}</td>
+            <td>{{ l.nombre_plato }}</td>
+            <td>{{ l.cantidad }}</td>
+            <td><strong>{{ l.valor_linea | moneda }}</strong></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+{% endblock %}

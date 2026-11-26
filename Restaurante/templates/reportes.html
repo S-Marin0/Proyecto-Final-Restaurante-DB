@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Reportes del Negocio{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Reportes de Ventas y Operacion</h2>
+  <p>Indicadores de desempeno comercial para apoyar las decisiones del restaurante.</p>
+</div>
+
+{% if error_bd %}
+  <div class="alert alert-error">{{ error_bd }}</div>
+{% else %}
+  <div class="grid-2" style="margin-bottom:20px;">
+    <div class="stat-card">
+      <div class="stat-label">Tasa de pedidos cobrados</div>
+      {% if tasa_pedidos %}
+        <div class="stat-value" style="color:var(--olive);">{{ tasa_pedidos.pct_pagados }} %</div>
+        <p style="margin:4px 0;">
+          <strong>{{ tasa_pedidos.pagados }}</strong> pedidos pagados de
+          <strong>{{ tasa_pedidos.total_pedidos }}</strong> registrados.
+        </p>
+        <p class="muted" style="margin:0;">
+          <strong>Denominador:</strong> total de pedidos registrados en el restaurante
+          (incluidos pendientes, en preparacion, entregados y cancelados).
+        </p>
+      {% endif %}
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-label">Tasa de reservas por confirmar</div>
+      {% if tasa_reservas %}
+        <div class="stat-value" style="color:var(--terracotta);">{{ tasa_reservas.pct_pendientes }} %</div>
+        <p style="margin:4px 0;">
+          <strong>{{ tasa_reservas.pendientes }}</strong> reservas pendientes de
+          <strong>{{ tasa_reservas.total_reservas }}</strong> registradas.
+        </p>
+        <p class="muted" style="margin:0;">
+          <strong>Denominador:</strong> todas las reservas registradas en el sistema
+          (incluidas confirmadas, atendidas, canceladas y no asistio).
+        </p>
+      {% elif aviso_reservas %}
+        <div class="alert alert-permiso" style="margin-top:10px; margin-bottom:0;">
+          <strong>Disponible solo para Operacion:</strong> {{ aviso_reservas }}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Dias con mayores ventas en pedidos pagados</h2>
+    <p class="muted">
+      ¿Que dias superaron el monto minimo de ventas seleccionado?
+    </p>
+
+    <form method="get" action="{{ url_for('reportes') }}" class="form-row" style="margin-bottom:14px;">
+      <div class="field" style="max-width:260px;">
+        <label for="umbral">Ventas diarias mayores a (COP)</label>
+        <input type="number" step="1000" id="umbral" name="umbral" value="{{ umbral }}">
+      </div>
+      <div>
+        <button type="submit" class="btn">Filtrar dias</button>
+      </div>
+    </form>
+
+    {% if dias_ventas %}
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Pedidos pagados</th>
+            <th>Unidades vendidas</th>
+            <th>Total vendido</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in dias_ventas %}
+            <tr>
+              <td><strong>{{ d.dia }}</strong></td>
+              <td>{{ d.pedidos_pagados }}</td>
+              <td>{{ d.unidades_vendidas }}</td>
+              <td><strong>{{ d.ventas | moneda }}</strong></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">Ningun dia supera {{ umbral | moneda }} en ventas pagadas.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Platos mas vendidos</h2>
+    <p class="muted">Ranking por unidades vendidas en pedidos pagados (desempate por ingresos generados y nombre).</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Plato</th>
+          <th>Categoria</th>
+          <th>Unidades vendidas</th>
+          <th>Ingresos generados</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in top_platos %}
+          <tr>
+            <td><strong>{{ p.nombre_plato }}</strong></td>
+            <td>{{ p.nombre_categoria_plato }}</td>
+            <td><strong>{{ p.unidades }}</strong></td>
+            <td>{{ p.ingresos | moneda }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+{% endblock %}

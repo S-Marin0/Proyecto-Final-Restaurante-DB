@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Nuestra Carta{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Nuestra Carta</h2>
+  <p>Consulte los platos del restaurante por nombre o categoria, ordenados de mayor a menor precio (con desempate alfabetico).</p>
+</div>
+
+<div class="card">
+  <form method="get" action="{{ url_for('busqueda') }}" class="form-row">
+    <div class="field">
+      <label for="q">Buscar plato</label>
+      <input type="text" id="q" name="q" value="{{ texto }}" placeholder="Ej. Hamburguesa, Pollo, Jugo, Porcion...">
+    </div>
+    <div class="field">
+      <label for="categoria">Categoria</label>
+      <select id="categoria" name="categoria">
+        <option value="">Todas las categorias</option>
+        {% for cat in categorias %}
+          <option value="{{ cat }}" {% if cat == categoria %}selected{% endif %}>{{ cat }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <button type="submit" class="btn">Buscar</button>
+      <a href="{{ url_for('busqueda') }}" class="btn btn-secondary">Ver todo</a>
+    </div>
+  </form>
+</div>
+
+{% if error_bd %}
+  <div class="alert alert-error">{{ error_bd }}</div>
+{% else %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+      <h3 style="margin:0;">Platos encontrados ({{ platos | length }})</h3>
+      <span class="muted">Orden: precio descendente, luego nombre ascendente</span>
+    </div>
+
+    {% if platos %}
+      <div class="menu-grid">
+        {% for p in platos %}
+          <div class="dish-card">
+            <div class="dish-top">
+              <div>
+                <div class="dish-name">{{ p.nombre_plato }}</div>
+                <span class="badge badge-warm" style="margin-top:4px;">{{ p.nombre_categoria_plato }}</span>
+              </div>
+              <div class="dish-price">{{ p.precio_base | moneda }}</div>
+            </div>
+            <div class="dish-meta">
+              <span>Preparacion: {{ p.tiempo_preparacion_min }} min</span>
+              <span class="badge {% if p.nombre_estado_plato == 'Disponible' %}badge-green{% elif p.nombre_estado_plato == 'Agotado' %}badge-red{% else %}badge-warn{% endif %}">
+                {{ p.nombre_estado_plato }}
+              </span>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <h3 style="margin-top:24px;">Vista en tabla</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Plato</th>
+            <th>Categoria</th>
+            <th>Precio</th>
+            <th>Tiempo estimado</th>
+            <th>Disponibilidad</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in platos %}
+            <tr>
+              <td><strong>{{ p.nombre_plato }}</strong></td>
+              <td>{{ p.nombre_categoria_plato }}</td>
+              <td><strong>{{ p.precio_base | moneda }}</strong></td>
+              <td>{{ p.tiempo_preparacion_min }} min</td>
+              <td>
+                <span class="badge {% if p.nombre_estado_plato == 'Disponible' %}badge-green{% elif p.nombre_estado_plato == 'Agotado' %}badge-red{% else %}badge-warn{% endif %}">
+                  {{ p.nombre_estado_plato }}
+                </span>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted" style="margin-top:12px;">No encontramos platos que coincidan con "{{ texto }}".</p>
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}

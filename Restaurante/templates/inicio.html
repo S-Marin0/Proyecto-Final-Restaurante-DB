@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block title %}{% if rol_activo == 'consulta' %}Bienvenido{% else %}Panel de Administracion{% endif %}{% endblock %}
+
+{% block content %}
+{% if not estado_bd.conectado %}
+  <div class="alert alert-error">
+    <strong>Servicio temporalmente no disponible:</strong> {{ estado_bd.mensaje }}<br>
+    <span style="font-size:0.86rem;">La pagina permanece activa; verifique la conexion en <code>Restaurante/.env</code> o que PostgreSQL este encendido.</span>
+  </div>
+{% endif %}
+
+{% if rol_activo == 'consulta' %}
+  {# ================================================================= #}
+  {# VISTA DE CLIENTE / VISITANTE (rol_consulta -> solo vistas)        #}
+  {# ================================================================= #}
+  <section class="hero">
+    <div>
+      <h2>Sabores preparados al momento en Restaurante La Mesa</h2>
+      <p>
+        Explore nuestra carta actualizada en vivo, consulte tiempos estimados de preparacion
+        y personalice sus platos favoritos. Para reservas de mesa o eventos especiales, comuniquese
+        con nuestro equipo en salon.
+      </p>
+    </div>
+    <div class="hero-actions">
+      <a href="{{ url_for('busqueda') }}" class="btn">Ver toda la carta</a>
+      <a href="{{ url_for('vistas') }}" class="btn btn-ghost">Estado de pedidos</a>
+    </div>
+  </section>
+
+  <div class="grid-3" style="margin-bottom:22px;">
+    <div class="stat-card">
+      <div class="stat-label">Horario de atencion</div>
+      <div style="font-size:1.05rem; font-weight:700; margin-top:6px;">Lunes a Domingo</div>
+      <div class="stat-sub">12:00 p. m. a 10:00 p. m. · Servicio en mesa</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Platos a tu gusto</div>
+      <div style="font-size:1.05rem; font-weight:700; margin-top:6px;">Personalizables</div>
+      <div class="stat-sub">Agrega extras o retira ingredientes al ordenar</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Eventos y celebraciones</div>
+      <div style="font-size:1.05rem; font-weight:700; margin-top:6px;">Reservas en salon</div>
+      <div class="stat-sub">Cumpleanos, cenas corporativas, aniversarios y eventos</div>
+    </div>
+  </div>
+
+  {% if destacados %}
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <h2 style="margin:0;">Recomendados de nuestra carta</h2>
+        <a href="{{ url_for('busqueda') }}" class="btn btn-sm">Buscar en toda la carta</a>
+      </div>
+      <p class="muted" style="margin-top:6px;">Platos disponibles hoy en cocina, con precio y tiempo estimado.</p>
+
+      <div class="menu-grid">
+        {% for p in destacados %}
+          <div class="dish-card">
+            <div class="dish-top">
+              <div>
+                <div class="dish-name">{{ p.nombre_plato }}</div>
+                <span class="badge badge-warm" style="margin-top:4px;">{{ p.nombre_categoria_plato }}</span>
+              </div>
+              <div class="dish-price">{{ p.precio_base | moneda }}</div>
+            </div>
+            <div class="dish-meta">
+              <span>Listo en ~{{ p.tiempo_preparacion_min }} min</span>
+              <span class="badge badge-green">{{ p.nombre_estado_plato }}</span>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+{% else %}
+  {# ================================================================= #}
+  {# PANEL ADMINISTRATIVO / OPERACION (rol_operacion)                  #}
+  {# ================================================================= #}
+  <section class="hero">
+    <div>
+      <h2>Panel de Administracion · Restaurante La Mesa</h2>
+      <p>
+        Gestion integral del restaurante: supervise ventas diarias, rotacion de mesas, alertas
+        de cocina e inventario, administracion de la carta y agenda de reservas.
+      </p>
+    </div>
+    <div class="hero-actions">
+      <a href="{{ url_for('reservas') }}" class="btn btn-success">Agendar reserva</a>
+      <a href="{{ url_for('platos') }}" class="btn">Administrar carta</a>
+      <a href="{{ url_for('alertas') }}" class="btn btn-ghost">Alertas cocina</a>
+    </div>
+  </section>
+
+  {% if resumen %}
+    <div class="grid-4">
+      <div class="stat-card">
+        <div class="stat-label">Platos en carta</div>
+        <div class="stat-value">{{ resumen.total_platos }}</div>
+        <div class="stat-sub">{{ resumen.platos_disponibles }} disponibles hoy</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Pedidos registrados</div>
+        <div class="stat-value">{{ resumen.total_pedidos }}</div>
+        <div class="stat-sub">{{ resumen.pedidos_pagados }} cerrados y pagados</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Ventas pagadas</div>
+        <div class="stat-value">{{ resumen.ventas_pagadas | moneda }}</div>
+        <div class="stat-sub">Total acumulado facturado</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Comandas en cola</div>
+        <div class="stat-value">{{ resumen.pedidos_en_curso }}</div>
+        <div class="stat-sub">Pendientes o en preparacion</div>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="grid-3" style="margin-bottom:22px;">
+    <div class="card" style="margin-bottom:0;">
+      <h3>Reportes de Ventas</h3>
+      <p class="muted">Dias que superan la meta de ventas, platos mas vendidos y tasas de cobro y reservas.</p>
+      <a href="{{ url_for('reportes') }}" class="btn btn-sm">Abrir reportes</a>
+    </div>
+    <div class="card" style="margin-bottom:0;">
+      <h3>Mesas y Consumo</h3>
+      <p class="muted">Pedidos por mesa (incluyendo mesas en 0), insumos consumidos y detalle de comandas.</p>
+      <a href="{{ url_for('detalle') }}" class="btn btn-sm">Ver consumo</a>
+    </div>
+    <div class="card" style="margin-bottom:0;">
+      <h3>Alertas de Cocina</h3>
+      <p class="muted">Cola de pedidos con espera, ingredientes sin receta y stock por debajo del minimo.</p>
+      <a href="{{ url_for('alertas') }}" class="btn btn-sm">Ver alertas</a>
+    </div>
+    <div class="card" style="margin-bottom:0;">
+      <h3>Administrar Carta</h3>
+      <p class="muted">Crear, actualizar precios o retirar platos con validacion de integridad.</p>
+      <a href="{{ url_for('platos') }}" class="btn btn-success btn-sm">Gestionar platos</a>
+    </div>
+    <div class="card" style="margin-bottom:0;">
+      <h3>Reservas de Mesas</h3>
+      <p class="muted">Registrar reservas validando aforo y sin solapamientos en una transaccion atomica.</p>
+      <a href="{{ url_for('reservas') }}" class="btn btn-success btn-sm">Gestionar reservas</a>
+    </div>
+    <div class="card" style="margin-bottom:0;">
+      <h3>Pedidos y Clientes</h3>
+      <p class="muted">Consulta consolidada sobre las vistas publicas del esquema.</p>
+      <a href="{{ url_for('vistas') }}" class="btn btn-secondary btn-sm">Ver vistas</a>
+    </div>
+  </div>
+{% endif %}
+
+<div class="card">
+  <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px;">
+    <div class="muted">
+      {% if estado_bd.conectado %}
+        <span class="badge badge-green">En linea</span>
+        Conectado a <code>{{ estado_bd.base_datos }}</code> como <code>{{ estado_bd.usuario_bd }}</code> ({{ estado_bd.version_pg }} via {{ estado_bd.driver }}).
+      {% else %}
+        <span class="badge badge-red">Sin conexion</span>
+        {{ estado_bd.mensaje }}
+      {% endif %}
+    </div>
+  </div>
+
+  <details {% if resultado_permiso %}open{% endif %}>
+    <summary>Verificar permisos de seguridad del perfil activo en PostgreSQL</summary>
+    <p class="muted" style="margin:10px 0;">
+      Pruebe directamente contra PostgreSQL que operaciones permite o rechaza el usuario
+      <code>{{ usuario_bd_esperado }}</code>:
+    </p>
+    <div style="display:flex; flex-wrap:wrap; gap:10px;">
+      <form method="post" action="{{ url_for('probar_permiso') }}">
+        <input type="hidden" name="accion" value="leer_cliente">
+        <button type="submit" class="btn btn-secondary btn-sm">Leer tabla privada Cliente</button>
+      </form>
+      <form method="post" action="{{ url_for('probar_permiso') }}">
+        <input type="hidden" name="accion" value="escribir_plato">
+        <button type="submit" class="btn btn-warn btn-sm">Intentar modificar tabla Plato</button>
+      </form>
+      <form method="post" action="{{ url_for('probar_permiso') }}">
+        <input type="hidden" name="accion" value="borrar_pedido">
+        <button type="submit" class="btn btn-danger btn-sm">Intentar eliminar un Pedido</button>
+      </form>
+      {% if rol_activo == 'consulta' %}
+        <a href="{{ url_for('platos') }}" class="btn btn-secondary btn-sm">Intentar entrar a Administrar Carta</a>
+      {% endif %}
+    </div>
+
+    {% if resultado_permiso %}
+      <div style="margin-top:12px; margin-bottom:0;" class="alert {% if resultado_permiso.tipo == 'ok' %}alert-success{% elif resultado_permiso.tipo == 'rechazo_bd' %}alert-permiso{% else %}alert-error{% endif %}">
+        <strong>{{ resultado_permiso.titulo }}</strong><br>
+        {{ resultado_permiso.detalle }}
+      </div>
+    {% endif %}
+  </details>
+</div>
+{% endblock %}

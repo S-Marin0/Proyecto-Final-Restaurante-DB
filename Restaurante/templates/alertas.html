@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Alertas de Cocina e Inventario{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Alertas de Cocina e Inventario</h2>
+  <p>Avisos automaticos para evitar desperdicio de insumos, demoras en cocina y quiebres de stock.</p>
+</div>
+
+{% if error_permiso %}
+  <div class="alert alert-permiso">
+    <strong>Acceso restringido por la base de datos:</strong><br>
+    {{ error_permiso }}<br>
+    <span style="font-size:0.86rem;">Cambie al perfil <strong>Operacion</strong> en la barra superior para consultar las alertas de cocina e inventario.</span>
+  </div>
+{% elif error_bd %}
+  <div class="alert alert-error">{{ error_bd }}</div>
+{% else %}
+  <div class="card">
+    <h2>Cola actual de cocina</h2>
+    <p class="muted">
+      Pedidos pendientes o en preparacion y cuantos pedidos entraron antes que cada uno.
+      Se recomienda avisar tiempo de espera cuando hay 3 o mas pedidos por delante.
+    </p>
+    {% if cola_pedidos %}
+      <table>
+        <thead>
+          <tr>
+            <th>Pedido</th>
+            <th>Hora de ingreso</th>
+            <th>Mesa</th>
+            <th>Estado</th>
+            <th>Pedidos por delante</th>
+            <th>Accion sugerida</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in cola_pedidos %}
+            <tr class="{% if p.pedidos_por_delante >= 3 %}highlight-alert{% endif %}">
+              <td><strong>#{{ p.id_pedido }}</strong></td>
+              <td>{{ p.fecha_creacion }}</td>
+              <td>Mesa {{ p.numero_mesa }}</td>
+              <td>{{ p.nombre_estado_pedido }}</td>
+              <td><strong>{{ p.pedidos_por_delante }}</strong></td>
+              <td>
+                {% if p.pedidos_por_delante >= 3 %}
+                  <span class="badge badge-red">Avisar demora a la mesa</span>
+                {% else %}
+                  <span class="badge badge-green">Tiempo normal</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No hay comandas pendientes en este momento.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Insumos en bodega sin receta asociada</h2>
+    <p class="muted">
+      Ingredientes con existencias actuales que ningun plato de la carta utiliza en su receta estandar.
+      Revise compras para evitar vencimiento de perecederos.
+    </p>
+    {% if sin_receta %}
+      <table>
+        <thead>
+          <tr>
+            <th>Ingrediente</th>
+            <th>Stock actual</th>
+            <th>Unidad</th>
+            <th>Ubicacion</th>
+            <th>Rotacion como adicional</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for i in sin_receta %}
+            <tr class="{% if i.veces_como_adicional == 0 %}highlight-alert{% else %}highlight-zero{% endif %}">
+              <td><strong>{{ i.nombre_ingrediente }}</strong></td>
+              <td>{{ i.stock_actual }}</td>
+              <td>{{ i.unidad_medida }}</td>
+              <td>{{ i.ubicacion }}</td>
+              <td>
+                {% if i.veces_como_adicional == 0 %}
+                  <span class="badge badge-red">Sin salida (pausar compra)</span>
+                {% else %}
+                  <span class="badge badge-warn">{{ i.veces_como_adicional }} veces solo como extra</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">Todos los ingredientes del inventario participan en al menos una receta.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Ingredientes por debajo del stock minimo</h2>
+    <p class="muted">Insumos que requieren pedido de reposicion a proveedores.</p>
+    {% if bajo_minimo %}
+      <table>
+        <thead>
+          <tr>
+            <th>Ingrediente</th>
+            <th>Stock actual</th>
+            <th>Stock minimo</th>
+            <th>Unidad</th>
+            <th>Ubicacion</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in bajo_minimo %}
+            <tr class="highlight-alert">
+              <td><strong>{{ b.nombre_ingrediente }}</strong></td>
+              <td><span class="badge badge-red">{{ b.stock_actual }}</span></td>
+              <td>{{ b.stock_minimo }}</td>
+              <td>{{ b.unidad_medida }}</td>
+              <td>{{ b.ubicacion }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">Todos los ingredientes se encuentran por encima del stock minimo.</p>
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}
