@@ -231,7 +231,7 @@ def registrar_reserva_transaccion(
         WHERE id_mesa = ?
     """
 
-"""
+
     try:
         with obtener_cursor(rol=rol, autocommit=False) as (conn, cur):
             # Fotografia ANTES de la transaccion
