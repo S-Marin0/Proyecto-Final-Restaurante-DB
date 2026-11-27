@@ -137,6 +137,52 @@ def _leer_estado_control(cur, id_mesa: int) -> dict:
     }
 
 
+def _validar_capacidad(antes: dict, cantidad_personas: int) -> None:
+    if cantidad_personas > antes["capacidad_mesa"]:
+        raise ErrorNegocioBD("REGLA_NEGOCIO", "...capacidad...")
+
+def _obtener_tipo(cur, id_tipo_reserva: int) -> tuple:
+    cur.execute(SQL_TIPO, (id_tipo_reserva,))
+    fila = cur.fetchone()
+    if not fila:
+        raise ErrorNegocioBD("FOREIGN_KEY", "El tipo de reserva no existe.", sqlstate="23503")
+    return fila  # (nombre_tipo, duracion_horas)
+
+def _validar_sin_solapamiento(cur, id_mesa, fecha, duracion, antes) -> None:
+    cur.execute(SQL_SOLAPAMIENTO, (id_mesa, ESTADO_RESERVA_CANCELADA, fecha, duracion, fecha))
+    conflicto = cur.fetchone()
+    if conflicto:
+        raise ErrorNegocioBD("REGLA_NEGOCIO", "...se cruza con la reserva...")
+
+def _insertar_reserva(cur, cedula, id_mesa, id_tipo, fecha, personas) -> int:
+    cur.execute(SQL_INSERT_RESERVA, (fecha, personas, cedula, id_mesa, id_tipo,
+                                     ESTADO_RESERVA_PENDIENTE))
+    return cur.rowcount
+
+def _actualizar_mesa(cur, id_mesa, estado_destino) -> int:
+    cur.execute(SQL_UPDATE_MESA, (estado_destino, id_mesa))
+    return cur.rowcount
+
+def registrar_reserva_transaccion(...):
+    with obtener_cursor(rol=rol, autocommit=False) as (conn, cur):
+        cur.execute("SELECT 1 FROM Mesa WHERE id_mesa = ? FOR UPDATE", (id_mesa,))
+        antes = _leer_estado_control(cur, id_mesa)
+
+        _validar_capacidad(antes, cantidad_personas)
+        nombre_tipo, duracion = _obtener_tipo(cur, id_tipo_reserva)
+        _validar_sin_solapamiento(cur, id_mesa, fecha_hora_inicio, duracion, antes)
+
+        filas_reserva = _insertar_reserva(cur, cedula_cliente, id_mesa,
+                                          id_tipo_reserva, fecha_hora_inicio, cantidad_personas)
+        try:
+            filas_mesa = _actualizar_mesa(cur, id_mesa, estado_destino)
+        except pyodbc.Error as exc:
+            conn.rollback()
+            ...
+        conn.commit()
+
+
+"""
 def registrar_reserva_transaccion(
     cedula_cliente: str,
     id_mesa: int,
@@ -185,6 +231,7 @@ def registrar_reserva_transaccion(
         WHERE id_mesa = ?
     """
 
+"""
     try:
         with obtener_cursor(rol=rol, autocommit=False) as (conn, cur):
             # Fotografia ANTES de la transaccion
@@ -303,3 +350,5 @@ def registrar_reserva_transaccion(
             }
     except pyodbc.Error as exc:
         raise traducir_error_pg(exc) from exc
+
+        """
