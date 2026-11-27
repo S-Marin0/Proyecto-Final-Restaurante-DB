@@ -138,6 +138,7 @@ def _leer_estado_control(cur, id_mesa: int) -> dict:
 
 
 
+
 def registrar_reserva_transaccion(
     cedula_cliente: str,
     id_mesa: int,
@@ -147,28 +148,49 @@ def registrar_reserva_transaccion(
     forzar_fallo: bool = False,
     rol: str = "operacion",
 ) -> dict:
+
     """
     Ejecuta en una sola transaccion:
-      0) Valida la regla de negocio de la Seccion B.2 (capacidad y no solapamiento).
-      1) INSERT INTO Reserva (Tabla 1).
-      2) UPDATE Mesa SET id_estado_mesa = 3 (Tabla 2) — o 9999 si forzar_fallo=True.
-      3) COMMIT si todo salio bien; ROLLBACK si algo falla en el paso 2.
+      0) Bloquea la mesa para evitar reservas simultaneas.
+      1) Valida capacidad y no solapamiento.
+      2) INSERT INTO Reserva.
+      3) UPDATE Mesa SET id_estado_mesa = 3.
+      4) COMMIT si todo sale bien; ROLLBACK si algo falla.
     """
-    sql_tipo = "SELECT nombre_tipo, duracion_horas FROM TipoReserva WHERE id_tipo_reserva = ?"
+
+    sql_bloquear_mesa = """
+        SELECT id_mesa
+        FROM Mesa
+        WHERE id_mesa = ?
+        FOR UPDATE
+    """
+
+    sql_tipo = """
+        SELECT nombre_tipo, duracion_horas
+        FROM TipoReserva
+        WHERE id_tipo_reserva = ?
+    """
+
     sql_solapamiento = """
         SELECT r.id_reserva,
                r.fecha_hora_inicio,
                t.nombre_tipo,
                t.duracion_horas
         FROM Reserva r
-        JOIN TipoReserva t ON t.id_tipo_reserva = r.id_tipo_reserva
+        JOIN TipoReserva t
+            ON t.id_tipo_reserva = r.id_tipo_reserva
         WHERE r.id_mesa = ?
           AND r.id_estado_reserva <> ?
-          AND r.fecha_hora_inicio < CAST(? AS TIMESTAMP) + CAST(? AS NUMERIC) * INTERVAL '1 hour'
-          AND CAST(? AS TIMESTAMP) < r.fecha_hora_inicio + t.duracion_horas * INTERVAL '1 hour'
+          AND r.fecha_hora_inicio <
+              CAST(? AS TIMESTAMP) +
+              CAST(? AS NUMERIC) * INTERVAL '1 hour'
+          AND CAST(? AS TIMESTAMP) <
+              r.fecha_hora_inicio +
+              t.duracion_horas * INTERVAL '1 hour'
         ORDER BY r.fecha_hora_inicio ASC
         LIMIT 1
     """
+
     sql_insert_reserva = """
         INSERT INTO Reserva (
             fecha_hora_inicio,
@@ -178,52 +200,70 @@ def registrar_reserva_transaccion(
             id_tipo_reserva,
             id_estado_reserva
         )
-        VALUES (CAST(? AS TIMESTAMP), ?, ?, ?, ?, ?)
+        VALUES (
+            CAST(? AS TIMESTAMP), ?, ?, ?, ?, ?
+        )
     """
+
     sql_update_mesa = """
         UPDATE Mesa
         SET id_estado_mesa = ?
         WHERE id_mesa = ?
     """
 
-
     try:
         with obtener_cursor(rol=rol, autocommit=False) as (conn, cur):
-            # Fotografia ANTES de la transaccion
-            antes = _leer_estado_control(cur, id_mesa)
-            if antes["numero_mesa"] is None:
-                raise ErrorNegocioBD("FOREIGN_KEY", "La mesa seleccionada no existe.", sqlstate="23503")
 
+            # --------------------------------------------------
+            # PASO 0: BLOQUEAR LA MESA
+            # --------------------------------------------------
+            cur.execute(sql_bloquear_mesa, (id_mesa,))
+            mesa_bloqueada = cur.fetchone()
+
+            antes = _leer_estado_control(cur, id_mesa)
+
+            if not mesa_bloqueada or antes["numero_mesa"] is None:
+                raise ErrorNegocioBD(
+                    "FOREIGN_KEY",
+                    "La mesa seleccionada no existe.",
+                    sqlstate="23503"
+                )
+
+            # --------------------------------------------------
+            # VALIDAR CANTIDAD DE PERSONAS
+            # --------------------------------------------------
             if cantidad_personas <= 0:
                 raise ErrorNegocioBD(
                     "CHECK",
-                    "La cantidad de personas de la reserva debe ser mayor que cero.",
-                    sqlstate="23514",
+                    "La cantidad de personas debe ser mayor que cero.",
+                    sqlstate="23514"
                 )
 
-            # ------------------------------------------------------------------
-            # REGLA DE NEGOCIO DE LA SECCION B.2 (que el esquema no vigila solo)
-            # Parte 1: cantidad_personas <= capacidad_mesa
-            # ------------------------------------------------------------------
             if cantidad_personas > antes["capacidad_mesa"]:
                 raise ErrorNegocioBD(
                     "REGLA_NEGOCIO",
-                    f"Regla de negocio (capacidad): la mesa {antes['numero_mesa']} tiene capacidad "
-                    f"para {antes['capacidad_mesa']} personas y la reserva solicita {cantidad_personas}. "
-                    "Seleccione una mesa mas grande o reduzca el numero de comensales.",
+                    f"La mesa {antes['numero_mesa']} tiene capacidad "
+                    f"para {antes['capacidad_mesa']} personas."
                 )
 
-            # Obtener duracion del tipo de reserva
+            # --------------------------------------------------
+            # OBTENER DURACION DEL TIPO DE RESERVA
+            # --------------------------------------------------
             cur.execute(sql_tipo, (id_tipo_reserva,))
             fila_tipo = cur.fetchone()
+
             if not fila_tipo:
-                raise ErrorNegocioBD("FOREIGN_KEY", "El tipo de reserva seleccionado no existe.", sqlstate="23503")
+                raise ErrorNegocioBD(
+                    "FOREIGN_KEY",
+                    "El tipo de reserva seleccionado no existe.",
+                    sqlstate="23503"
+                )
+
             nombre_tipo, duracion_horas = fila_tipo[0], fila_tipo[1]
 
-            # ------------------------------------------------------------------
-            # REGLA DE NEGOCIO DE LA SECCION B.2 (que el esquema no vigila solo)
-            # Parte 2: no solapar reservas activas de la misma mesa
-            # ------------------------------------------------------------------
+            # --------------------------------------------------
+            # VALIDAR SOLAPAMIENTO
+            # --------------------------------------------------
             cur.execute(
                 sql_solapamiento,
                 (
@@ -234,20 +274,21 @@ def registrar_reserva_transaccion(
                     fecha_hora_inicio,
                 ),
             )
+
             conflicto = cur.fetchone()
+
             if conflicto:
                 raise ErrorNegocioBD(
                     "REGLA_NEGOCIO",
-                    f"Regla de negocio (no solapamiento): la mesa {antes['numero_mesa']} ya tiene la "
-                    f"reserva #{conflicto[0]} ({conflicto[2]}, {conflicto[3]} h) iniciando el "
-                    f"{conflicto[1]}. El horario solicitado ({fecha_hora_inicio}, {duracion_horas} h) "
-                    "se cruza con esa reserva.",
+                    f"La mesa {antes['numero_mesa']} ya tiene la "
+                    f"reserva #{conflicto[0]} ({conflicto[2]}, "
+                    f"{conflicto[3]} h) iniciando el {conflicto[1]}. "
+                    f"El horario solicitado se cruza con esa reserva."
                 )
 
-            # ------------------------------------------------------------------
-            # TRANSACCION MULTI-TABLA (Reserva + Mesa)
-            # ------------------------------------------------------------------
-            # Paso 1: insertar en Reserva
+            # --------------------------------------------------
+            # PASO 1: INSERTAR RESERVA
+            # --------------------------------------------------
             cur.execute(
                 sql_insert_reserva,
                 (
@@ -259,24 +300,40 @@ def registrar_reserva_transaccion(
                     ESTADO_RESERVA_PENDIENTE,
                 ),
             )
+
             filas_reserva = cur.rowcount
 
-            # Paso 2: actualizar estado de la Mesa (o forzar fallo real de FK en BD)
-            estado_destino = ESTADO_MESA_INVALIDO_FALLO if forzar_fallo else ESTADO_MESA_RESERVADA
+            # --------------------------------------------------
+            # PASO 2: ACTUALIZAR MESA
+            # --------------------------------------------------
+            estado_destino = (
+                ESTADO_MESA_INVALIDO_FALLO
+                if forzar_fallo
+                else ESTADO_MESA_RESERVADA
+            )
+
             try:
-                cur.execute(sql_update_mesa, (estado_destino, id_mesa))
+                cur.execute(
+                    sql_update_mesa,
+                    (estado_destino, id_mesa)
+                )
+
                 filas_mesa = cur.rowcount
+
             except pyodbc.Error as exc_paso2:
-                # Fallo en el Paso 2 despues de haber insertado la Reserva en el Paso 1 -> ROLLBACK
+
                 conn.rollback()
+
                 despues_rollback = _leer_estado_control(cur, id_mesa)
                 error_traducido = traducir_error_pg(exc_paso2)
+
                 return {
                     "resultado": "ROLLBACK",
                     "mensaje": (
-                        f"Paso 1 ejecutado (INSERT en Reserva: {filas_reserva} fila), pero el Paso 2 "
-                        f"(UPDATE en Mesa) fallo en PostgreSQL: {error_traducido}. "
-                        "Se ejecuto ROLLBACK automatico: la reserva se deshizo y nada quedo a medias."
+                        f"Paso 1 ejecutado (INSERT en Reserva: "
+                        f"{filas_reserva} fila), pero el Paso 2 "
+                        f"(UPDATE en Mesa) fallo: {error_traducido}. "
+                        "Se ejecuto ROLLBACK: la reserva se deshizo."
                     ),
                     "filas_reserva": filas_reserva,
                     "filas_mesa": 0,
@@ -286,15 +343,20 @@ def registrar_reserva_transaccion(
                     "despues": despues_rollback,
                 }
 
-            # Ambos pasos exitosos -> COMMIT
+            # --------------------------------------------------
+            # PASO 3: CONFIRMAR TRANSACCION
+            # --------------------------------------------------
             conn.commit()
+
             despues_commit = _leer_estado_control(cur, id_mesa)
+
             return {
                 "resultado": "COMMIT",
                 "mensaje": (
-                    f"Transaccion confirmada (COMMIT): se inserto {filas_reserva} reserva "
-                    f"({nombre_tipo}, {duracion_horas} h) y se actualizo {filas_mesa} mesa "
-                    f"(Mesa {antes['numero_mesa']} -> {despues_commit['estado_mesa']})."
+                    f"Transaccion confirmada: se inserto "
+                    f"{filas_reserva} reserva ({nombre_tipo}, "
+                    f"{duracion_horas} h) y se actualizo "
+                    f"{filas_mesa} mesa."
                 ),
                 "filas_reserva": filas_reserva,
                 "filas_mesa": filas_mesa,
@@ -303,5 +365,6 @@ def registrar_reserva_transaccion(
                 "antes": antes,
                 "despues": despues_commit,
             }
+
     except pyodbc.Error as exc:
         raise traducir_error_pg(exc) from exc
